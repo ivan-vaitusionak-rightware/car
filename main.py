@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import time
 import requests
+import msvcrt
 
 CAR_ID: int = 1
 CAR_AUTH: int = 985898
@@ -10,6 +11,8 @@ CAR_AUTH: int = 985898
 # car_id = 3
 # car_auth = 838748
 
+def wait_for_keypress():
+    msvcrt.getch()
 
 def get_camera_image(id: int) -> bytes:
     if id == 11:
@@ -41,11 +44,9 @@ def put(speed: float, flip: bool):
     )
 
 
-def angle_between(a, b):
-    dot = np.dot(a, b)
-    cos = np.clip(dot, -1, 1)
-    return np.degrees(np.arccos(cos))
-
+def angle_between(v1, v2):
+    cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    return np.degrees(np.arccos(np.clip(cos_angle, -1, 1)))
 
 # we need to spam these for each second for car to move
 
@@ -61,9 +62,14 @@ def build_world_canvas():
 
     return canvas
 
-def draw_car_on_canvas(canvas, car_id, car_corners_world):
+def draw_car_on_canvas(canvas, car_id, ptransform, car_marker):
+    car_corners_world = np.array([to_world(ptransform, pt) for pt in car_marker[0]])
     car_center_world = np.mean(car_corners_world, axis=0)
     car_direction_vector_world = car_corners_world[0] - car_corners_world[3]
+
+    if car_id == CAR_ID:
+        print(car_direction_vector_world)
+        print()
 
     # Car is a circle
     car_pt = to_canvas(car_center_world)
@@ -156,6 +162,23 @@ def to_world(ptransform, pixel_point):
     return cv2.perspectiveTransform(p, ptransform)[0][0]
 
 
+def draw_all_cars(markers, ptransform):
+    canvas = build_world_canvas()
+
+    for id, marker in markers.items():
+        if id == 11 or id == 12 or id == 13:
+            continue
+
+        draw_car_on_canvas(canvas, id, ptransform, marker)
+
+    return canvas
+
+def get_car_direction_world(ptransform, car_marker_image):
+    car_corners_world = np.array([to_world(ptransform, pt) for pt in car_marker_image[0]])
+    car_direction_vector_world = car_corners_world[0] - car_corners_world[3]
+
+    return car_direction_vector_world
+
 
 def rotate_n_times() -> bool:
     markers = fetch_recent_markers()
@@ -166,14 +189,17 @@ def rotate_n_times() -> bool:
         print(f"Failed to find a car {CAR_ID}. Retrying..")
         return False
 
-    car_center_world = to_world(ptransform, get_center_point(car_marker))
+    car_direction = get_car_direction_world(ptransform, car_marker)
 
     # Wait 2 seconds for car to rotate
     rotate_power = 0.45
 
-    for _ in range(10):
-        rotate(rotate_power)
-        time.sleep(2)
+    for i in range(10):
+        print("Move car, press any button")
+        wait_for_keypress()
+
+        # rotate(rotate_power)
+        # time.sleep(2)
 
         markers = fetch_recent_markers()
 
@@ -182,13 +208,16 @@ def rotate_n_times() -> bool:
             print(f"Failed to find a car {CAR_ID}. Retrying..")
             continue
 
-        car_center_world_1 = to_world(ptransform, get_center_point(car_marker_1))
+        car_direction_1 = get_car_direction_world(ptransform, car_marker_1)
 
-        car_rotate_angle = angle_between(car_center_world, car_center_world_1)
-        print(f"{rotate_power} -> {car_rotate_angle}")
+        car_rotate_angle = angle_between(car_direction, car_direction_1)
+        print(f"{rotate_power} -> {car_rotate_angle} | {car_direction} {car_direction_1}")
 
-        car_center_world = car_center_world_1
+        car_direction = car_direction_1
 
+        canvas = draw_all_cars(markers, ptransform)
+        cv2.imshow(f"world{i}", canvas)
+        cv2.waitKey(1)
 
     return True
 
@@ -198,6 +227,8 @@ def main():
         if success:
             break
 
+    wait_for_key()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
@@ -213,17 +244,9 @@ if __name__ == "__main__":
 
 
 
-# canvas = build_world_canvas()
 
 
-# for id, corners in markers.items():
-#     if id == 11 or id == 12 or id == 13:
-#         continue
 
-#     car_corners_world = np.array([to_world(pt) for pt in corners[0]])
-#     draw_car_on_canvas(canvas, id, car_corners_world)
-
-# cv2.imshow(f"world{i}", canvas)
 
 # # cv2.aruco.drawDetectedMarkers(image, corners, ids)
 # # cv2.imshow(f"out{i}", image)
@@ -231,6 +254,4 @@ if __name__ == "__main__":
 # if i == 0:
 #     time.sleep(2)
 # else:
-#     wait_for_key()
-#     cv2.destroyAllWindows()
 #     break
