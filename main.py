@@ -12,12 +12,6 @@ CAR_AUTH: int = 985898
 # car_auth = 838748
 
 
-QUADRANT_MIDDLES = {
-    "TL": [0.25, 0.25],
-    "TR": [0.25, 0.75],
-    "BL": [0.75, 0.25],
-    "BR": [0.75, 0.75],
-}
 
 
 def get_camera_image(id: int) -> bytes:
@@ -234,6 +228,31 @@ def get_current_quadrant() -> str:
 def get_car_position_and_direction():
     pass
 
+def get_car_quadrant(car_position) -> str:
+    x, y = car_position
+    if y < 0.5:
+        if x < 0.5:
+            return "TL"
+        else:
+            return "TR"
+    else:
+        if x < 0.5:
+            return "BL"
+        else:
+            return "BR"
+
+
+def rotate_to_quadrant(car_direction, quadrant: str):
+    QUADRANT_MIDDLES = {
+        "TL": [0.25, 0.25],
+        "TR": [0.25, 0.75],
+        "BL": [0.75, 0.25],
+        "BR": [0.75, 0.75],
+    }
+    quadrant_middle = QUADRANT_MIDDLES[quadrant]
+
+    angle = angle_between(car_direction, quadrant_middle)
+
 
 
 def main():
@@ -251,9 +270,12 @@ def main():
 
         car_position, car_direction = get_car_position_and_direction(ptransform, car_marker_1)
 
-        if True: # is in current quadrant
+        if get_car_quadrant(car_position) == get_current_quadrant():
             continue
 
+
+
+        # rotate to quadrant
         # drive to quadrant
 
 
