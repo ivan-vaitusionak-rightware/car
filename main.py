@@ -11,8 +11,14 @@ CAR_AUTH: int = 985898
 # car_id = 3
 # car_auth = 838748
 
-def wait_for_keypress():
-    msvcrt.getch()
+
+QUADRANT_MIDDLES = {
+    "TL": [0.25, 0.25],
+    "TR": [0.25, 0.75],
+    "BL": [0.75, 0.25],
+    "BR": [0.75, 0.75],
+}
+
 
 def get_camera_image(id: int) -> bytes:
     if id == 11:
@@ -221,14 +227,35 @@ def rotate_n_times() -> bool:
 
     return True
 
+def get_current_quadrant() -> str:
+    # @TODO
+    return "TL"
+
+def get_car_position_and_direction():
+    pass
+
+
+
 def main():
     while True:
-        success = rotate_n_times()
-        if success:
-            break
+        time.sleep(1)
 
-    wait_for_key()
-    cv2.destroyAllWindows()
+        markers = fetch_recent_markers()
+        ptransform = get_world_perspective_transform(markers)
+
+        car_marker = markers.get(CAR_ID)
+        if car_marker is None:
+            print(f"Failed to find a car {CAR_ID}. Retrying..")
+            continue
+
+
+        car_position, car_direction = get_car_position_and_direction(ptransform, car_marker_1)
+
+        if True: # is in current quadrant
+            continue
+
+        # drive to quadrant
+
 
 if __name__ == "__main__":
     main()
@@ -255,3 +282,6 @@ if __name__ == "__main__":
 #     time.sleep(2)
 # else:
 #     break
+
+
+fetch_recent_markers()
