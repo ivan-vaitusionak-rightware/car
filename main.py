@@ -8,9 +8,6 @@ import msvcrt
 CAR_ID: int = 1
 CAR_AUTH: int = 985898
 
-# car_id = 3
-# car_auth = 838748
-
 
 def get_camera_image(id: int) -> bytes:
     if id == 11:
@@ -27,10 +24,10 @@ def get_camera_image(id: int) -> bytes:
 
     return response.content
 
-def rotate(speed: float):
+def send_rotate(speed: float):
     put(speed, True)
 
-def move(speed: float):
+def send_move(speed: float):
     put(speed, False)
 
 
@@ -69,8 +66,6 @@ def fetch_recent_markers() -> dict[int, Any]:
     markers = {int(id): corner for id, corner in zip(ids.flatten(), corners)}
 
     return markers
-
-
 
 # Hardcoded border markers for camera 11.
 # Note that the last corner is not visible.
@@ -113,9 +108,18 @@ def to_world(ptransform, pixel_point):
     return cv2.perspectiveTransform(p, ptransform)[0][0]
 
 
+QUADRANT_MATCH = {
+    "TL": "BR",
+    "TR": "BL",
+    "BR": "TL",
+    "BL": "TR",
+}
 def get_current_quadrant() -> str:
-    # @TODO
-    return "TL"
+    real_quadrant = requests.get("http://192.168.0.85:8000/goal").json()["quadrant"]
+    return QUADRANT_MATCH[real_quadrant]
+
+def rev(quad) -> str:
+    return QUADRANT_MATCH[quad]
 
 def get_car_position_and_direction(ptransform, car_marker):
     car_corners_world = np.array([to_world(ptransform, pt) for pt in car_marker[0]])
@@ -140,19 +144,52 @@ def get_car_quadrant(car_position) -> str:
 
 QUADRANT_MIDDLES = {
     "TL": [0.25, 0.25],
-    "TR": [0.25, 0.75],
-    "BL": [0.75, 0.25],
+    "TR": [0.75, 0.25],
+    "BL": [0.25, 0.75],
     "BR": [0.75, 0.75],
 }
 
-def rotate_to(car_direction, quadrant_angle):
-    angle = angle_between(car_direction, quadrant_angle)
-    # TODO
-    pass
+def turnpower(deg):
+    max = 0.75
 
-def drive_to(car_position, quadrant_position):
-    # TODO
-    pass
+    m = max / 180
+    return m * deg
+
+def movepower(len):
+    max = 0.25
+
+    m = max / 1
+    return m * len
+
+def rotate_to(car_direction, target):
+    cross = np.cross(car_direction, target)
+    dot = np.dot(car_direction, target)
+    angle = np.degrees(np.arctan2(cross, dot))
+
+    power = turnpower(angle)
+
+    print(car_direction)
+    print(target)
+    print(f"Angle to middle is: {angle}. Rotating with power: {power}")
+
+    send_rotate(power)
+    time.sleep(1)
+
+def drive_to(car_position, target):
+    dist = distance_between(car_position, target)
+
+    power = movepower(dist)
+
+    print(car_position)
+    print(target)
+    print(f"Distance to middle is: {dist}. Moving with power: {power}")
+
+    send_move(power)
+    time.sleep(1)
+
+def distance_between(v1, v2):
+    return np.linalg.norm(v2 - v1)
+
 
 def main():
     while True:
@@ -161,20 +198,28 @@ def main():
 
         car_marker = markers.get(CAR_ID)
         if car_marker is None:
+            import random
             print(f"Failed to find a car {CAR_ID}. Retrying..")
+            send_rotate(random.choice([-1, 1]))
+            send_move(
             continue
 
         car_position, car_direction = get_car_position_and_direction(ptransform, car_marker)
-
+        car_quadrant = get_car_quadrant(car_position)
         current_quadrant = get_current_quadrant()
+
         if get_car_quadrant(car_position) == current_quadrant:
+            print(f"Car in quadrant: {rev(car_quadrant)}. Same as current")
             continue
+
+        print(f"Car in quadrant: {rev(car_quadrant)} moving to {rev(current_quadrant)}")
 
         quadrant_middle = QUADRANT_MIDDLES[current_quadrant]
         rotate_to(car_direction, quadrant_middle)
         drive_to(car_position, quadrant_middle)
 
         time.sleep(1)
+        print()
 
 
 if __name__ == "__main__":
